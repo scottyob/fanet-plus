@@ -2,7 +2,7 @@
 
 =====================================
 
-Fanet is an open protocol created by Juergen Eckert. The current, modern implementation is Fanet+, that runs over LoRa. You can see what seems to be the golden standard reference implementation in his stm32 repo, with the [specifications here](https://github.com/3s1d/fanet-stm32/blob/master/Src/fanet/radio/protocol.txt). Another good reference [is this pdf](https://github.com/Betschi/FANET/blob/master/Specifications/FANET_Protocol_V1_1_02.pdf)
+Fanet is an open protocol created by Juergen Eckert. The current, modern implementation is Fanet+, running over LoRa. You can see what seems to be the golden standard in a reference implementation in his stm32 repo, found with the [specifications here](https://github.com/3s1d/fanet-stm32/blob/master/Src/fanet/radio/protocol.txt). Another good reference [is this pdf](https://github.com/Betschi/FANET/blob/master/Specifications/FANET_Protocol_V1_1_02.pdf)
 
 This library aims at being an extremely simple implementation of a subset of the message types in the Fanet+ protocol spec, designed to run on little endian systems in the Arduino ecosystem. It is not opinionated on what library you use to receive or transmit the packets, but you should be careful to only transmit on the frequencies and duty cycles allowed by your local jurisdiction.
 
