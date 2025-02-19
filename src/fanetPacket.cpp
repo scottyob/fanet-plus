@@ -1,5 +1,6 @@
 #include "fanetPacket.h"
 #include <etl/optional.h>
+using namespace Fanet;
 
 Packet Packet::parse(const char* bytes, size_t length) {
   Packet packet;

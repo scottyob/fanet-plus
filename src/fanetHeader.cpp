@@ -2,6 +2,9 @@
 #include <iostream>
 #include "etl/bit_stream.h"
 
+using namespace Fanet;
+
+
 Header Header::parse(const char* bytes) {
   auto header = Header();
 

@@ -42,16 +42,16 @@ void tearDown(void) {
 
 // Tests that we can parse a location packet
 void test_parses(void) {
-    auto packet = Packet::parse((char*)locationPacket, (uint8_t)16);
+    auto packet = Fanet::Packet::parse((char*)locationPacket, (uint8_t)16);
 
-    TEST_ASSERT_TRUE(packet.header.type == PacketType::Tracking);
-    TEST_ASSERT_TRUE(packet.header.is_forward == true);
-    TEST_ASSERT_TRUE(packet.header.has_extension_header == false);
+    TEST_ASSERT_TRUE(packet.header.type == Fanet::PacketType::Tracking);
+    TEST_ASSERT_TRUE(packet.header.shouldForward == true);
+    TEST_ASSERT_TRUE(packet.header.hasExtensionHeader == false);
 }
 
 void test_encodes(void) {
     // Let's assume that parsing is working
-    auto packet = Packet::parse((char*)locationPacket, (uint8_t)16);
+    auto packet = Fanet::Packet::parse((char*)locationPacket, (uint8_t)16);
 
     unsigned char encodedBuffer[256] = {0};
     packet.encode((char*)encodedBuffer);

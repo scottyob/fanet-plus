@@ -1,5 +1,6 @@
 #include "fanetMessage.h"
 #include <cstring>
+using namespace Fanet;
 
 size_t Message::encode(char *to) const {
     // Copy the subheader to the buffer

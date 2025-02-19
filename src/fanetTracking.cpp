@@ -4,6 +4,9 @@
 #include "fanetTracking.h"
 #include <etl/bit_stream.h>
 
+using namespace Fanet;
+
+
 Tracking Tracking::parse(const char *buffer, const size_t size)
 {
     auto tracking = Tracking();

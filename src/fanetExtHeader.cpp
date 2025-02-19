@@ -2,6 +2,9 @@
 
 #include <etl/bit_stream.h>
 
+using namespace Fanet;
+
+
 ExtendedHeader ExtendedHeader::parse(const char *from, size_t &size)
 {
     auto ret = ExtendedHeader();

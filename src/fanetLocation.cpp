@@ -1,5 +1,8 @@
 #include "fanetLocation.h"
 
+using namespace Fanet;
+
+
 const float kLatitudeScaling = 93206;
 const float kLongitudeScaling = 46603;
 

@@ -1,5 +1,7 @@
 #include "fanetGroundTracking.h"
 
+using namespace Fanet;
+
 size_t GroundTracking::encode(char *to) const
 {
     etl::bit_stream_writer bit_stream((void*) to, (void*)(to + 256), etl::endian::big);
