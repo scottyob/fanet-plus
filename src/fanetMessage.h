@@ -1,11 +1,12 @@
 #pragma once
 #include <stdint.h>
 #include <stddef.h>
+#include "fanetPayload.h"
 
 namespace Fanet
 {
 
-    class Message
+    class Message : PacketPayloadBase
     {
     public:
         // Spec deems this subheader is TBD for future use.  0 is for "normal use"
@@ -14,16 +15,10 @@ namespace Fanet
         /// @brief Unicode message up to 244 bytes (assuming Fanet mac header of 11, + 256 bytes for max LoRa buffer)
         char message[244];
 
-        /// @brief Encodes the packet into the buffer
-        /// @param to Buffer to encode payload into
-        /// @return Size of the encoded packet.
-        size_t encode(char *to) const;
-
-        /// @brief Parses character array into a Message type
-        /// @param  buffer buffer where message resides.
-        /// @param size size of buffer
-        /// @return Returns a `Message` object parsed from the buffer.
-        static Message parse(const char *buffer, const size_t size);
+        bool operator==(const PacketPayloadBase &) const override;
+        size_t parse(etl::bit_stream_reader &reader) override;
+        size_t encode(etl::bit_stream_writer &writer) const override;
+        PacketType getType() const override;
     };
 
 }

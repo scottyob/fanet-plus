@@ -4,38 +4,33 @@
 
 using namespace Fanet;
 
-
-ExtendedHeader ExtendedHeader::parse(const char *from, size_t &size)
+size_t ExtendedHeader::parse(etl::bit_stream_reader &reader)
 {
-    auto ret = ExtendedHeader();
-
-    etl::bit_stream_reader reader((void *)from, (void *)(from + kExtendedHeaderMaxSize), etl::endian::big);
-
-    ret.ackType = (ExtendedHeaderAckType) reader.read_unchecked<uint8_t>(2U);
+    ackType = (ExtendedHeaderAckType)reader.read_unchecked<uint8_t>(2U);
     auto hasDestinationMac = reader.read_unchecked<uint8_t>(1U);
     auto hasSignature = reader.read_unchecked<uint8_t>(1U);
     reader.skip(4U); // Reserved bits
 
-    size = 1;
+    size_t size = 1;
 
-    if(hasDestinationMac) {
-        reader.skip(3); // Skips the destination address for mac address
-        ret.destinationMac = Mac::parse(&from[1]);
+    if (hasDestinationMac)
+    {
+        destinationMac = Mac::parse(reader);
         size += 3;
     }
 
-    if(hasSignature) {
+    if (hasSignature)
+    {
         // We don't support signatures, skip over these bytes
         size += 4;
+        reader.skip(4);
     }
 
-    return ExtendedHeader();
+    return size;
 }
 
-size_t ExtendedHeader::encode(char *to) const
+size_t ExtendedHeader::encode(etl::bit_stream_writer &writer) const
 {
-    etl::bit_stream_writer writer((void *)to, (void *)(to + kExtendedHeaderMaxSize), etl::endian::big);
-
     writer.write_unchecked<uint8_t>((int)ackType, 2U);
     writer.write_unchecked<bool>((bool)destinationMac.has_value(), 1U);
     // Write signature flag.  Library does not support it, so will always be 0
@@ -43,11 +38,17 @@ size_t ExtendedHeader::encode(char *to) const
     writer.skip(4U); // Reserved bits
     size_t size = 8;
 
-    if(destinationMac.has_value()) {
-        writer.skip(8 * 3); // Skip the next 3 bytes mac address
-        destinationMac.value().encode(&to[1]);
-        size += 3;
+    if (destinationMac.has_value())
+    {
+        size += destinationMac.value().encode(writer);
     }
 
     return size;
+}
+
+bool Fanet::ExtendedHeader::operator==(const ExtendedHeader &other) const
+{
+    return ackType == other.ackType &&
+           includesSignature == other.includesSignature &&
+           destinationMac == other.destinationMac;
 }

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "fanetLocation.h"
+#include "fanetPayload.h"
 
 namespace Fanet
 {
@@ -41,23 +42,17 @@ namespace Fanet
     +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     */
     /// @brief Packet payload for encoding Ground Tracking
-    class GroundTracking
+    class GroundTracking : PacketPayloadBase
     {
     public:
         bool shouldTrackOnline = false;
         GroundTrackingType type = GroundTrackingType::Other;
         Location location;
 
-        /// @brief Encodes the packet into the buffer
-        /// @param to Buffer to encode payload into
-        /// @return Size of the encoded packet.
-        size_t encode(char *to) const;
-
-        /// @brief Parses character array into a Message type
-        /// @param  buffer buffer where message resides.
-        /// @param size size of buffer
-        /// @return Returns a `Message` object parsed from the buffer.
-        static GroundTracking parse(const char *buffer, const size_t size);
+        size_t parse(etl::bit_stream_reader &reader) override;
+        size_t encode(etl::bit_stream_writer &writer) const override;
+        bool operator==(const PacketPayloadBase &) const override;
+        PacketType getType() const override;
     };
 
 }

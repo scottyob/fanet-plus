@@ -37,12 +37,9 @@ namespace Fanet
 
         // NOTE:  Signature is NOT supported
 
-        /// @brief Parses extension header
-        /// @param from Byte stream to parse from
-        /// @param size Size of header (bytes read)
-        /// @return
-        static ExtendedHeader parse(const char *from, size_t &size);
-        size_t encode(char *to) const;
+        size_t parse(etl::bit_stream_reader &reader);
+        size_t encode(etl::bit_stream_writer &writer) const;
+        bool operator==(const ExtendedHeader &other) const;
     };
 
 }

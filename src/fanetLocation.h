@@ -40,6 +40,10 @@ namespace Fanet
 
         /// @brief Writes 48-bit data structure into Fanet+ bytes
         void toBitStream(etl::bit_stream_writer &writer) const;
+
+        bool operator==(const Location &other) const {
+            return latitude == other.latitude && longitude == other.longitude;
+        }
     };
 
 }

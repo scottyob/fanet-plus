@@ -7,64 +7,60 @@
 using namespace Fanet;
 
 
-Tracking Tracking::parse(const char *buffer, const size_t size)
-{
-    auto tracking = Tracking();
-
-    etl::bit_stream_reader bit_stream((void *)buffer, size, etl::endian::big);
-    
+size_t Fanet::Tracking::parse(etl::bit_stream_reader &reader)
+{    
     // Get the location
-    tracking.location = Location::fromBitStream(bit_stream);
+    location = Location::fromBitStream(reader);
     
     // LSB of location
-    tracking.altitude = etl::read_unchecked<uint16_t>(bit_stream, 8U);
+    altitude = etl::read_unchecked<uint16_t>(reader, 8U);
 
-    tracking.onlineTracking = etl::read_unchecked<char>(bit_stream, 1U);
-    auto aircraftType = etl::read_unchecked<uint8_t>(bit_stream, 3U);
-    tracking.aircraftType = (AircraftType)aircraftType;
-    bool scaling = etl::read_unchecked<char>(bit_stream, 1U);
-    auto altitudeMsb = etl::read_unchecked<uint8_t>(bit_stream, 3U);
+    onlineTracking = etl::read_unchecked<char>(reader, 1U);
+    auto aircraftTypeInt = etl::read_unchecked<uint8_t>(reader, 3U);
+    aircraftType = (AircraftType)aircraftTypeInt;
+    bool scaling = etl::read_unchecked<char>(reader, 1U);
+    auto altitudeMsb = etl::read_unchecked<uint8_t>(reader, 3U);
 
     // Tracking is 11 bits, with the most significant bits disjoint
-    tracking.altitude |= (altitudeMsb << 8);
+    altitude |= (altitudeMsb << 8);
 
     if (scaling)
     {
-        tracking.altitude *= kAltScalingFactor;
+        altitude *= kAltScalingFactor;
     }
 
     // Speed is in counts of 0.5km/h
-    scaling = etl::read_unchecked<char>(bit_stream, 1U);
-    uint8_t speed = etl::read_unchecked<uint8_t>(bit_stream, 7U);
-    tracking.speed = speed * 0.5 * (scaling ? kSpeedScalingFactor : 1);
+    scaling = etl::read_unchecked<char>(reader, 1U);
+    uint8_t speed = etl::read_unchecked<uint8_t>(reader, 7U);
+    speed = speed * 0.5 * (scaling ? kSpeedScalingFactor : 1);
 
     // Climb rate is in counts of 0.1m/s
-    scaling = etl::read_unchecked<char>(bit_stream, 1U);
-    uint8_t climbRate = etl::read_unchecked<uint8_t>(bit_stream, 7U);
-    tracking.climbRate = climbRate * 0.1 * (scaling ? kClimbRateScalingFactor : 1);
+    scaling = etl::read_unchecked<char>(reader, 1U);
+    uint8_t climbRateInt = etl::read_unchecked<uint8_t>(reader, 7U);
+    climbRate = climbRateInt * 0.1 * (scaling ? kClimbRateScalingFactor : 1);
 
     // Heading is per 360/256 deg
-    tracking.heading = (360/256) * etl::read_unchecked<uint8_t>(bit_stream, 8U);
+    heading = (360/256) * etl::read_unchecked<uint8_t>(reader, 8U);
 
-    if(!bit_stream.size_bits() < 96) {
-        return tracking;
-    }
+    // Turn rate is Optional!!!
 
     // Turn rate is optional, in 0.25deg/s
-    scaling = etl::read_unchecked<char>(bit_stream, 1U);
-    uint8_t turnRate = etl::read_unchecked<uint8_t>(bit_stream, 7U);
-    tracking.turnRate = 0.25 * turnRate * (scaling ? kTurnRateScalingFactor : 1);
-
-    if(!bit_stream.size_bits() < 104) {
-        return tracking;
+    auto optionalScaling = etl::read<char>(reader, 1U);
+    if(!optionalScaling.has_value()) {
+        return 11;
     }
+    uint8_t turnRate = etl::read_unchecked<uint8_t>(reader, 7U);
+    turnRate = 0.25 * turnRate * (optionalScaling.value() ? kTurnRateScalingFactor : 1);
 
     // QNE Offset is in meters
-    scaling = etl::read_unchecked<char>(bit_stream, 1U);
-    uint8_t offset = etl::read_unchecked<uint8_t>(bit_stream, 7U);
-    tracking.qneOffset = offset * (scaling ? kQneOffsetScalingFactor : 1);
+    optionalScaling = etl::read<char>(reader, 1U);
+    if(!optionalScaling.has_value()) {
+        return 12;
+    }
+    uint8_t offset = etl::read_unchecked<uint8_t>(reader, 7U);
+    qneOffset = offset * (optionalScaling.value() ? kQneOffsetScalingFactor : 1);
 
-    return tracking;
+    return 13;
 }
 
 /// @brief Scales a number by a unit factor, and determines if a scaling factor needs to be applied
@@ -95,44 +91,42 @@ int toScaled(T number, float unitFactor, float scalingFactor, int bitCount, bool
 }
 
 
-size_t Tracking::encode(char *to) const
-{
-    etl::bit_stream_writer bit_stream((void*) to, (void*)(to + 256), etl::endian::big);
-    
+size_t Fanet::Tracking::encode(etl::bit_stream_writer &writer) const
+{    
     // Write location
-    location.toBitStream(bit_stream);
-    size_t size = 48;
+    location.toBitStream(writer);
+    size_t size = 6;
 
     // Work out altitude to encode, based on the scaling factor to have it fit into 11 bits.
     bool scaling;
     int alt = toScaled(altitude, 1, kAltScalingFactor, 11, scaling);
 
     // Altitude least significant bits
-    etl::write_unchecked(bit_stream, alt & 0xFF, 8U);
+    etl::write_unchecked(writer, alt & 0xFF, 8U);
 
     // Next byte is tracking, Aircraft type, Aircraft scaling, and MSB of Altitude
-    etl::write_unchecked(bit_stream, (int)onlineTracking, 1U);
-    etl::write_unchecked(bit_stream, (int)aircraftType, 3U);
-    etl::write_unchecked(bit_stream, (int)scaling, 1U);
+    etl::write_unchecked(writer, (int)onlineTracking, 1U);
+    etl::write_unchecked(writer, (int)aircraftType, 3U);
+    etl::write_unchecked(writer, (int)scaling, 1U);
 
     // Bits 8-10 of the (MSB) of the altitude
-    etl::write_unchecked(bit_stream, alt & 0x700, 3U);
+    etl::write_unchecked(writer, alt & 0x700, 3U);
     size += 2; // 2 byes for the altitude, tracking, aircraft type.
 
     // 1 byte for the speed.
     int speed2 = toScaled(speed, 0.5, kSpeedScalingFactor, 7, scaling);
-    etl::write_unchecked(bit_stream, scaling, 1U);
-    etl::write_unchecked(bit_stream, speed2, 7U);
+    etl::write_unchecked(writer, scaling, 1U);
+    etl::write_unchecked(writer, speed2, 7U);
     size++;
 
     // 1 byte for climbRate
     int climb2 = toScaled(climbRate, 0.1f, kClimbRateScalingFactor, 7, scaling);
-    etl::write_unchecked(bit_stream, scaling, 1U);
-    etl::write_unchecked(bit_stream, climb2, 7U);
+    etl::write_unchecked(writer, scaling, 1U);
+    etl::write_unchecked(writer, climb2, 7U);
     size++;
 
     // Heading is per 360/256.  One byte
-    etl::write_unchecked<uint8_t>(bit_stream, heading / (360/256), 8U);
+    etl::write_unchecked<uint8_t>(writer, heading / (360/256), 8U);
     size++;
 
     if(!turnRate.has_value())
@@ -140,8 +134,8 @@ size_t Tracking::encode(char *to) const
     
     // Write the turn rate (in 0.25deg/s units)
     int turn2 = toScaled(turnRate.value(), 0.25, kTurnRateScalingFactor, 7, scaling);
-    etl::write_unchecked(bit_stream, scaling, 1U);
-    etl::write_unchecked(bit_stream, turn2, 7U);
+    etl::write_unchecked(writer, scaling, 1U);
+    etl::write_unchecked(writer, turn2, 7U);
     size++;
 
     if(!qneOffset.has_value())
@@ -149,9 +143,41 @@ size_t Tracking::encode(char *to) const
     
     // Write the QNE Offset in meters
     int scaling2 = toScaled(qneOffset.value(), 1, kQneOffsetScalingFactor, 7, scaling);
-    etl::write_unchecked(bit_stream, scaling, 1U);
-    etl::write_unchecked(bit_stream, scaling2, 7U);
+    etl::write_unchecked(writer, scaling, 1U);
+    etl::write_unchecked(writer, scaling2, 7U);
     size++;
 
     return size;
+}
+
+bool Fanet::Tracking::operator==(const PacketPayloadBase & other) const
+{
+    const Tracking* otherTracking = dynamic_cast<const Tracking*>((PacketPayloadBase*)&other);
+    if(otherTracking == nullptr)
+        return false;
+    
+    bool equals = location == otherTracking->location &&
+        altitude == otherTracking->altitude &&
+        onlineTracking == otherTracking->onlineTracking &&
+        aircraftType == otherTracking->aircraftType &&
+        speed == otherTracking->speed &&
+        climbRate == otherTracking->climbRate &&
+        heading == otherTracking->heading;
+    
+    if(!equals)
+        return false;
+    
+    if(turnRate.has_value() && !otherTracking->turnRate.has_value())
+        return false;
+    
+    if(!turnRate.has_value() && !(turnRate.value() == otherTracking->turnRate.value()))
+        return false;
+    
+    if(qneOffset.has_value() && !otherTracking->qneOffset.has_value())
+        return false;
+    
+    if(qneOffset.has_value() && !(qneOffset.value() == otherTracking->qneOffset.value()))
+        return false;
+    
+    return true;
 }

@@ -53,11 +53,9 @@ namespace Fanet
     bool hasExtensionHeader;
     Mac srcMac;
 
-    // Parses a packet header from a 4 byte array
-    static Header parse(const char *bytes);
-
-    // Encodes the packet into a 4 byte array.
-    void encode(char *to);
+    size_t parse(etl::bit_stream_reader &reader);
+    size_t encode(etl::bit_stream_writer &writer) const;
+    bool operator==(const Header &) const;
   };
 
 }

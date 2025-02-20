@@ -2,26 +2,42 @@
 #include <cstring>
 using namespace Fanet;
 
-size_t Message::encode(char *to) const {
-    // Copy the subheader to the buffer
-    to[0] = subheader;
 
-    // Copy the message to the buffer
-    std::strncpy(to + 1, message, sizeof(message));
-
-    // Return the total size of the encoded packet
-    return 1 + std::strlen(message);
+bool Fanet::Message::operator==(const PacketPayloadBase &other) const
+{
+    Message* otherMessage = dynamic_cast<Message*>((PacketPayloadBase*)&other);
+    if(otherMessage == nullptr) {
+        return false;
+    }
+    // Check that the message s-string is equal
+    if(!strcmp(message, otherMessage->message)) {
+        return true;
+    }
+    return false;
 }
 
-Message Message::parse(const char *buffer, const size_t size) {
-    Message msg;
+size_t Fanet::Message::parse(etl::bit_stream_reader &reader)
+{
+    auto byte = reader.read<uint8_t>(8U);
+    int i = 0;
+    while(byte.has_value() && byte.value() != '\0') {
+        message[i++] = byte.value();
+        byte = reader.read<uint8_t>(8U);
+    }
+    return i;
+}
 
-    // Extract the subheader from the buffer
-    msg.subheader = buffer[0];
+size_t Fanet::Message::encode(etl::bit_stream_writer &writer) const
+{
+    int i = 0;
+    while(message[i] != '\0' && i < sizeof(message)) {
+        writer.write_unchecked(message[i++], 8U);
+    }
+    writer.write_unchecked('\0', 8U);
+    return i;
+}
 
-    // Extract the message from the buffer
-    std::strncpy(msg.message, buffer + 1, size - 1);
-    msg.message[size - 1] = '\0'; // Ensure null-termination
-
-    return msg;
+PacketType Fanet::Message::getType() const
+{
+    return PacketType::Message;
 }

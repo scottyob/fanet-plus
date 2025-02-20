@@ -1,7 +1,11 @@
 {
     "cSpell.words": [
         "FANET",
-        "HANGGLIDER"
+        "HANGGLIDER",
+        "RXMIT",
+        "Scal",
+        "Tracki",
+        "xorshift"
     ],
     "files.associations": {
         "format": "cpp",

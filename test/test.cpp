@@ -2,9 +2,10 @@
 #include <iostream>
 #include <iomanip>
 #include "fanetPacket.h"
+#include "etl/array.h"
 
 // Fanet+ packet as sent by SoftRF containing a location packet
-unsigned char locationPacket[16] = {
+etl::array<uint8_t, FANET_MAX_PACKET_SIZE> locationPacket = {
 	// Offset 0x00000000 to 0x0000000F
 	// Header
     0x41, 
@@ -42,7 +43,7 @@ void tearDown(void) {
 
 // Tests that we can parse a location packet
 void test_parses(void) {
-    auto packet = Fanet::Packet::parse((char*)locationPacket, (uint8_t)16);
+    auto packet = Fanet::Packet::parse(locationPacket, 16);
 
     TEST_ASSERT_TRUE(packet.header.type == Fanet::PacketType::Tracking);
     TEST_ASSERT_TRUE(packet.header.shouldForward == true);
@@ -51,10 +52,10 @@ void test_parses(void) {
 
 void test_encodes(void) {
     // Let's assume that parsing is working
-    auto packet = Fanet::Packet::parse((char*)locationPacket, (uint8_t)16);
+    auto packet = Fanet::Packet::parse(locationPacket, 16);
 
-    unsigned char encodedBuffer[256] = {0};
-    packet.encode((char*)encodedBuffer);
+    etl::array<uint8_t, FANET_MAX_PACKET_SIZE> encodedBuffer = {0};
+    packet.encode(encodedBuffer);
 
     for(int i = 0; i < 16; i++) {
         TEST_ASSERT_EQUAL(locationPacket[i], encodedBuffer[i]);

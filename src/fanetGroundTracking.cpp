@@ -2,28 +2,40 @@
 
 using namespace Fanet;
 
-size_t GroundTracking::encode(char *to) const
+size_t Fanet::GroundTracking::parse(etl::bit_stream_reader &reader)
 {
-    etl::bit_stream_writer bit_stream((void*) to, (void*)(to + 256), etl::endian::big);
-    // Encode the location
-    location.toBitStream(bit_stream);
+    location = Location::fromBitStream(reader);
+    type = (GroundTrackingType)reader.read_unchecked<uint8_t>(4U);
+    reader.skip(3U); // Unused
+    shouldTrackOnline = reader.read_unchecked<uint8_t>(1U);
 
-    // Write the ground type
-    bit_stream.write_unchecked<uint8_t>((int)type, 4U);
-    bit_stream.skip(3U); // Unused
-    bit_stream.write_unchecked<uint8_t>(shouldTrackOnline, 1U);
-    return 49;
+    return 56;
 }
 
-GroundTracking GroundTracking::parse(const char *buffer, const size_t size)
+size_t Fanet::GroundTracking::encode(etl::bit_stream_writer &writer) const
 {
-    etl::bit_stream_reader bit_stream((void *)buffer, size, etl::endian::big);
+    // Encode the location
+    location.toBitStream(writer);
 
-    auto ret = GroundTracking();
-    ret.location = Location::fromBitStream(bit_stream);
-    ret.type = (GroundTrackingType)bit_stream.read_unchecked<uint8_t>(4U);
-    bit_stream.skip(3U); // Unused
-    ret.shouldTrackOnline = bit_stream.read_unchecked<uint8_t>(1U);
+    // Write the ground type
+    writer.write_unchecked<uint8_t>((int)type, 4U);
+    writer.skip(3U); // Unused
+    writer.write_unchecked<uint8_t>(shouldTrackOnline, 1U);
+    return 56;
+}
 
-    return ret;
+bool Fanet::GroundTracking::operator==(const PacketPayloadBase &other) const
+{
+    auto otherGround = dynamic_cast<const GroundTracking *>(&other);
+    if (!otherGround)
+        return false;
+
+    return (location == otherGround->location &&
+            type == otherGround->type &&
+            shouldTrackOnline == otherGround->shouldTrackOnline);
+}
+
+PacketType Fanet::GroundTracking::getType() const
+{
+    return PacketType::GroundTracking;
 }
