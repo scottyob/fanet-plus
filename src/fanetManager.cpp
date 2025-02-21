@@ -131,7 +131,7 @@ etl::optional<unsigned long> Fanet::FanetManager::nextTxTime(const unsigned long
             it = txQueue.erase(it);
             continue;
         }
-        return txQueue.front().sendAt;
+        return etl::max(txQueue.front().sendAt, csmaNextTx);
     }
 
     // If we're here, there's nothing to send!  Our send queue is empty!
