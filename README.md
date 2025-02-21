@@ -27,7 +27,7 @@ Only a subset of Fanet+ message types and features were implemented (Pull reques
 
 ## Packet Handler
 
-This library is good for parsing and encoding Fanet messages at the moment, but lacks a handler to say figure out when and how to retransmit packets.
+This library is good for parsing and encoding Fanet messages at the moment, includes a fanet FanetManager, but is currently untested and should be used with care.
 
 ## Usage Examples
 
