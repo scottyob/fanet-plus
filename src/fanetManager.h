@@ -1,7 +1,9 @@
 #include "fanetMac.h"
 #include "etl/optional.h"
-#include "etl/priority_queue.h"
+#include "etl/deque.h"
+#include "etl/list.h"
 #include "etl/unordered_map.h"
+#include "etl/random.h"
 #include "fanetPacket.h"
 
 // we keep the neighbors around for 5 minutes before timing them out.
@@ -25,12 +27,34 @@
 #define FANET_RXMIT_MAX 600 // Maximum time (in ms) we should wait before rxmit'ing a packet
 #endif
 
+#ifndef FANET_FORWARD_MIN_DB_BOOST
+#define FANET_FORWARD_MIN_DB_BOOST 20.0f // If a forwarded packet is boosted by this amount, don't rxmit
+#endif
+
+#ifndef FANET_FORWARD_MAX_RSSI_DBM
+#define FANET_FORWARD_MAX_RSSI_DBM -90.0f // If a packet is received with this RSSI, don't forward
+#endif
+
+#ifndef FANET_CSMA_MIN
+#define FANET_CSMA_MIN 20 // Wait a min of 20ms before trying to transmit again if the channel is busy
+#endif
+
+#ifndef FANET_CSMA_MAX
+#define FANET_CSMA_MAX 40 // Wait a max of ms before trying to transmit again if the channel is busy
+#endif
+
+#ifndef FANET_MAX_SEND_AGE
+#define FANET_MAX_SEND_AGE 800 // If a packet is older than this many ms, don't try and send it.  Assume too old.
+#endif
+
 namespace Fanet
 {
     /// @brief A packet queued for transmit.
     struct TxPacket
     {
         unsigned long sendAt;
+        unsigned long rxTime; // If forwarded, keep track of when this packet was received.
+        float rssi;           // If forwarded, keep track of the rx Rssi
         Packet packet;
 
         bool operator<(const TxPacket &other) const
@@ -38,7 +62,14 @@ namespace Fanet
             return sendAt < other.sendAt;
         }
 
-        TxPacket(unsigned long sendAt, Packet packet) : sendAt(sendAt), packet(packet) {}
+        TxPacket(
+            unsigned long sendAt,
+            Packet packet,
+            float rssi = 0.0f,
+            unsigned long rxTime = 0) : sendAt(sendAt),
+                                        packet(packet),
+                                        rssi(rssi),
+                                        rxTime(rxTime) {}
     };
 
     /*
@@ -56,11 +87,14 @@ namespace Fanet
 
         /// @brief Creates an instance of a FanetManager
         /// @param source address of the device you're initializing.
-        FanetManager(Mac srcAddress) : src(srcAddress) {}
+        /// @param ms Current time (used for seeding random number generator).
+        FanetManager(Mac srcAddress, unsigned long ms) {
+            Begin(srcAddress, ms);
+        }
 
         /// @brief Begins or resets the FanetManager
         /// @param srcAddress source address of the device you're initializing
-        void Begin(Mac srcAddress);
+        void Begin(Mac srcAddress, unsigned long ms);
 
         /// @brief Handles receiving a packet
         /// @param bytes Receive buffer to handle
@@ -68,11 +102,13 @@ namespace Fanet
         /// @param ms  Time at which packet was received (typically millis())
         etl::optional<Packet> handleRx(const etl::array<uint8_t, FANET_MAX_PACKET_SIZE> &bytes,
                                        const size_t &size,
-                                       unsigned long ms);
+                                       unsigned long ms,
+                                       float rssi);
 
         /// @brief Handles transmitting a packet from our tx queue
+        /// @param ms current time
         /// @param f function pointer to perform the transmit, should return True if sent successfully
-        void doTx(bool (*f)(const etl::array<uint8_t, FANET_MAX_PACKET_SIZE> *bytes, const size_t &size));
+        void doTx(unsigned long ms, bool (*f)(const etl::array<uint8_t, FANET_MAX_PACKET_SIZE> *bytes, const size_t &size));
 
         /// @brief Time in ms we next wish to perform a tx
         /// @param ms current time
@@ -84,7 +120,7 @@ namespace Fanet
         /// @param pkt time to send (current time)
         /// @param shouldForward if the packet should be forwarded
         /// @param destinationMac
-        bool sendPacket(const PacketPayload payload, unsigned long ms, const bool &shouldForward = true, etl::optional<Mac> destinationMac = etl::optional<Mac>(), const bool requestAck = true);
+        bool sendPacket(const PacketPayload payload, unsigned long ms, const bool &shouldForward = true, etl::optional<Mac> destinationMac = etl::optional<Mac>(), const ExtendedHeaderAckType requestAck = ExtendedHeaderAckType::None);
 
     private:
         etl::optional<Mac> src; // Src address, (ours)
@@ -93,10 +129,22 @@ namespace Fanet
         etl::unordered_map<uint32_t, unsigned long, FANET_MAX_NEIGHBORS> neighborTable;
 
         // etl:: <Packet, FANET_TX_QUEUE_DEPTH> txQueue;
-        etl::priority_queue<TxPacket, FANET_TX_QUEUE_DEPTH> txQueue;
+        etl::list<TxPacket, FANET_TX_QUEUE_DEPTH> txQueue;
 
         /// @brief Flushes old neighbors from the state table
         /// @param makeHeadroom Ensures there is
         void flushOldNeighborEntries(const unsigned long currentMs);
+
+        /// @brief Queues a packet for transmission
+        /// @param txPacket packet to queue
+        /// @param ms current ms
+        void queueForwardFrame(TxPacket txPacket, unsigned long ms);
+
+        /// @brief Random number generator
+        etl::random_xorshift random;
+
+        // When a transmit has failed, we'll wait a random amount of time before trying
+        // any transmissions again.  This is the time we'll wait for a new tx.
+        unsigned long csmaNextTx = 0;
     };
 }
