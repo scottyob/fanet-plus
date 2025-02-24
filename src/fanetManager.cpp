@@ -14,6 +14,8 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
     const size_t& size,
     unsigned long ms,
     float rssi) {
+  stats.rx++;
+
   // If this packet is useful to the application layer, we'll return it
   etl::optional<Packet> ret;
 
@@ -22,6 +24,7 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
 
   // If the packet is from our own mac-address, it's probably a forward and can be dropped
   if (packet.header.srcMac == src) {
+    stats.rxFromUsDrp++;
     return ret;
   }
 
@@ -51,14 +54,16 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
         // The sender requested a 2-hop Ack on an already forwarded packet.  We'll send the
         // ack back to the original sender with forward / possibly two hops away
         sendPacket(Ack(), ms, true, packet.header.srcMac);
+        stats.txAck++;
       } else if (ackType == ExtendedHeaderAckType::Forwarded ||
                  ackType == ExtendedHeaderAckType::Requested) {
         // The sender requested an ack, but either did not request it be forwarded, or did request
         // the ack be forwarded but we got it directly.  Here we assume that we'll have
         // bi-directional communication and we'll send the ack directly back to the sender.
         sendPacket(Ack(), ms, false, packet.header.srcMac);
+        stats.txAck++;
       }
-
+      stats.processed++;
       return packet;
     }
 
@@ -76,6 +81,7 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
 
   // This packet is not specifically meant for someone else, so, it's probably interesting
   // to the application layer
+  stats.processed++;
   return packet;
 }
 
@@ -97,9 +103,11 @@ void Fanet::FanetManager::doTx(
     // 15ms + 2ms per byte before we're allowed to send again.
     // No idea why these values, they came from the stm32 Fanet implementation.
     csmaNextTx = ms + 15 + (size * 2);
+    stats.txSuccess++;
   } else {
     // If the transmit failed, we'll wait a random amount of time before trying again
     csmaNextTx = ms + random.range(FANET_CSMA_MIN, FANET_CSMA_MAX);
+    stats.txFailed++;
   }
 }
 
@@ -208,6 +216,7 @@ void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, const unsigned lo
     // There could be a case where we have a lot more altitude than the sender, so,
     // this is something to consider at a later time.  Perhaps if a message or ground
     // based tracking message is received, we should still forward it anyway?
+    stats.fwdMinRssiDrp++;
     return;
   }
 
@@ -218,6 +227,7 @@ void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, const unsigned lo
     auto it =
         neighborTable.find(txPacket.packet.extHeader.value().destinationMac.value().toInt32());
     if (it == neighborTable.end()) {
+      stats.fwdNeighborDrp++;
       return;
     }
   }
@@ -233,6 +243,7 @@ void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, const unsigned lo
       if (txPacket.rssi > it->rssi + FANET_FORWARD_MIN_DB_BOOST) {
         // Remove the packet from the queue
         txQueue.erase(it);
+        stats.fwdDbBoostDrop++;
         return;
       }
       // Adjust the new tx time in the hope that we'll still get a new one
@@ -241,11 +252,13 @@ void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, const unsigned lo
       etl::insertion_sort(txQueue.begin(), txQueue.end(), [](const TxPacket& a, const TxPacket& b) {
         return a.sendAt < b.sendAt;
       });
+      stats.fwdEnqueuedDrop++;
       return;
     }
   }
 
   // put the packet on the back of the tx queue
+  stats.forwarded++;
   txQueue.push_back(txPacket);
 
   // ensure the packet is sorted
@@ -264,7 +277,6 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
   }
 
   // Insert a location packet
-  Packet packet;
   if (groundType.has_value()) {
     // This is a ground tracking update
     auto payload = GroundTracking();
@@ -272,7 +284,7 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
     payload.location.longitude = lng;
     payload.shouldTrackOnline = true;
     payload.type = groundType.value();
-    packet.payload = payload;
+    sendPacket(payload, ms);
   } else {
     auto payload = Tracking();
     payload.aircraftType = aircraftType;
@@ -283,19 +295,8 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
     payload.location.longitude = lng;
     payload.onlineTracking = true;
     payload.speed = speed;
-    packet.payload = payload;
+    sendPacket(payload, ms);
   }
-
-  packet.header.srcMac = src.value();
-  packet.header.hasExtensionHeader = false;
-  packet.header.shouldForward = true;
-  packet.header.type = ((PacketPayloadBase*)&packet.payload)->getType();
-
-  auto txPacket = TxPacket(ms, packet, 0.0f);
-  if (txQueue.full()) {
-    txQueue.pop_back();
-  }
-  txQueue.push_front(txPacket);
 
   // Location update interval is
   // recommended interval: floor((#neighbors/10 + 1) * 5s)

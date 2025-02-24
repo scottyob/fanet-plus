@@ -71,6 +71,21 @@ namespace Fanet {
     }
   };
 
+  struct Stats {
+    uint32_t rx = 0;                 // All packets received
+    uint32_t txSuccess = 0;          // All packets transmitted
+    uint32_t txFailed = 0;           // An attempted transmission failed
+    uint32_t processed = 0;          // Packets passed to the application stack to be processed
+    uint32_t forwarded = 0;          // All packets that were forwarded
+    uint32_t fwdMinRssiDrp = 0;      // Packets discarded due to Rssi being too good
+    uint32_t fwdNeighborDrp = 0;     // Packets discarded due to no neighbor in neighbor table
+    uint32_t fwdEnqueuedDrop = 0;    // Packet was already queued
+    uint32_t fwdDbBoostDrop = 0;     // Pkts dropped from txQueue with subsequent good rssi
+    uint32_t rxFromUsDrp = 0;        // Dropped packets from our own Mac
+    uint32_t txAck = 0;              // Number of Acks sent
+    uint32_t neighborTableSize = 0;  // Number of neighbors currently in our neighbor table
+  };
+
   /*
   @brief Manages the state and comms of a Fanet Protocol
 
@@ -156,6 +171,14 @@ namespace Fanet {
     // Public attributes that can be sent for tracking updates
     AircraftType aircraftType;
 
+    /// @brief Gets runtime statistics
+    /// @return Stats object
+    Stats getStats() {
+      auto ret = stats;
+      ret.neighborTableSize = neighborTable.size();
+      return ret;
+    }
+
    private:
     etl::optional<Mac> src;  // Src address, (ours)
 
@@ -197,5 +220,8 @@ namespace Fanet {
 
     // Time which we're allowed to enqueue a tracking packet
     unsigned long nextAllowedTrackingTime;
+
+    // Keep track of statistics
+    Stats stats;
   };
 }  // namespace Fanet
