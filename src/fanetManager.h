@@ -57,7 +57,7 @@
 namespace Fanet {
   /// @brief A packet queued for transmit.
   struct TxPacket {
-    unsigned long sendAt;
+    unsigned long sendAt;  // Time we wish to send (will time)
     unsigned long rxTime;  // If forwarded, keep track of when this packet was received.
     float rssi;            // If forwarded, keep track of the rx Rssi
     Packet packet;
@@ -65,7 +65,10 @@ namespace Fanet {
     bool operator<(const TxPacket& other) const { return sendAt < other.sendAt; }
 
     TxPacket(unsigned long sendAt, Packet packet, float rssi = 0.0f, unsigned long rxTime = 0)
-        : sendAt(sendAt), packet(packet), rssi(rssi), rxTime(rxTime) {}
+        : sendAt(sendAt), packet(packet), rssi(rssi) {
+      // Time received defaults to time to send if not sent
+      this->rxTime = rxTime ? rxTime : sendAt;
+    }
   };
 
   /*
@@ -78,7 +81,7 @@ namespace Fanet {
   class FanetManager {
    public:
     /// @brief Creates instance of FanetManager.  Required to Begin before using
-    FanetManager() : positionNeedsTx(false) {}
+    FanetManager() {}
 
     /// @brief Creates an instance of a FanetManager
     /// @param source address of the device you're initializing.
@@ -108,7 +111,7 @@ namespace Fanet {
     /// @brief Time in ms we next wish to perform a tx
     /// @param ms current time
     /// @return the offset of when we next wish to perform a transmit, if set
-    etl::optional<unsigned long> nextTxTime(const unsigned long ms);
+    etl::optional<unsigned long> nextTxTime(const unsigned long& ms);
 
     /// @brief Requests a packet be sent
     /// @param pkt packet to send
@@ -130,12 +133,28 @@ namespace Fanet {
     /// @param lat latitude
     /// @param lng longitude
     /// @param alt altitude
-    void setPos(const float& lat, const float& lng, const uint32_t& alt) {
+    void setPos(const float& lat,
+                const float& lng,
+                const uint32_t& alt,
+                const unsigned long& ms,
+                int heading = 0,  // in degrees
+                float climbRate = 0.0f,
+                float speedKmh = 0.0f) {
+      if (this->lat == lat && this->lng == lng && this->alt == alt) {
+        return;
+      }
+
       this->lat = lat;
       this->lng = lng;
       this->alt = alt;
-      positionNeedsTx = true;
+      this->climbRate = climbRate;
+      this->heading = heading;
+      this->speed = speedKmh;
+      queueTrackingUpdate(ms);
     }
+
+    // Public attributes that can be sent for tracking updates
+    AircraftType aircraftType;
 
    private:
     etl::optional<Mac> src;  // Src address, (ours)
@@ -148,12 +167,12 @@ namespace Fanet {
 
     /// @brief Flushes old neighbors from the state table
     /// @param makeHeadroom Ensures there is
-    void flushOldNeighborEntries(const unsigned long currentMs);
+    void flushOldNeighborEntries(const unsigned long& currentMs);
 
     /// @brief Queues a packet for transmission
     /// @param txPacket packet to queue
     /// @param ms current ms
-    void queueForwardFrame(TxPacket txPacket, unsigned long ms);
+    void queueForwardFrame(TxPacket txPacket, const unsigned long& ms);
 
     /// @brief Random number generator
     etl::random_xorshift random;
@@ -166,7 +185,17 @@ namespace Fanet {
     float lat;
     float lng;
     uint32_t alt;
-    bool positionNeedsTx;
+    float climbRate;
+    int heading;
+    float speed;
     etl::optional<GroundTrackingType> groundType;
+
+    /// @brief Queues a tracking update packet if the internal has been long enough since our last
+    /// update
+    /// @param ms Current ms
+    void queueTrackingUpdate(const unsigned long& ms);
+
+    // Time which we're allowed to enqueue a tracking packet
+    unsigned long nextAllowedTrackingTime;
   };
 }  // namespace Fanet

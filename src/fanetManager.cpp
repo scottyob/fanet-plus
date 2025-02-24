@@ -103,7 +103,7 @@ void Fanet::FanetManager::doTx(
   }
 }
 
-etl::optional<unsigned long> Fanet::FanetManager::nextTxTime(const unsigned long ms) {
+etl::optional<unsigned long> Fanet::FanetManager::nextTxTime(const unsigned long& ms) {
   // Find the first eligible packet to send, removing those that are now too old from
   // the send queue
   for (auto it = txQueue.begin(); it != txQueue.end();) {
@@ -165,7 +165,7 @@ bool Fanet::FanetManager::sendPacket(const PacketPayload payload,
   return true;
 }
 
-void Fanet::FanetManager::flushOldNeighborEntries(const unsigned long currentMs) {
+void Fanet::FanetManager::flushOldNeighborEntries(const unsigned long& currentMs) {
   etl::vector<std::pair<uint32_t, unsigned long>, FANET_MAX_NEIGHBORS> valid_neighbors;
 
   // Step 1: Iterate and collect valid neighbors
@@ -199,7 +199,7 @@ void Fanet::FanetManager::flushOldNeighborEntries(const unsigned long currentMs)
   }
 }
 
-void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, unsigned long ms) {
+void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, const unsigned long& ms) {
   if (txPacket.rssi > FANET_FORWARD_MAX_RSSI_DBM) {
     // If this frame is significantly strong, assume little good we will be done
     // forwarding it and drop it here.
@@ -252,4 +252,52 @@ void Fanet::FanetManager::queueForwardFrame(TxPacket txPacket, unsigned long ms)
   etl::insertion_sort(txQueue.begin(), txQueue.end(), [](const TxPacket& a, const TxPacket& b) {
     return a.sendAt < b.sendAt;
   });
+}
+
+void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
+  // We have another tracking location that needs to go out.
+
+  // If we're too close to our previous update time, don't do anything with this location update
+  // Or we have not been initialized yet
+  if (!src.has_value() || ms < nextAllowedTrackingTime) {
+    return;
+  }
+
+  // Insert a location packet
+  Packet packet;
+  if (groundType.has_value()) {
+    // This is a ground tracking update
+    auto payload = GroundTracking();
+    payload.location.latitude = lat;
+    payload.location.longitude = lng;
+    payload.shouldTrackOnline = true;
+    payload.type = groundType.value();
+    packet.payload = payload;
+  } else {
+    auto payload = Tracking();
+    payload.aircraftType = aircraftType;
+    payload.altitude = alt;
+    payload.climbRate = climbRate;
+    payload.heading = heading;
+    payload.location.latitude = lat;
+    payload.location.longitude = lng;
+    payload.onlineTracking = true;
+    payload.speed = speed;
+    packet.payload = payload;
+  }
+
+  packet.header.srcMac = src.value();
+  packet.header.hasExtensionHeader = false;
+  packet.header.shouldForward = true;
+  packet.header.type = ((PacketPayloadBase*)&packet.payload)->getType();
+
+  auto txPacket = TxPacket(ms, packet, 0.0f);
+  if (txQueue.full()) {
+    txQueue.pop_back();
+  }
+  txQueue.push_front(txPacket);
+
+  // Location update interval is
+  // recommended interval: floor((#neighbors/10 + 1) * 5s)
+  nextAllowedTrackingTime = ms + floor((neighborTable.size() / 10.0f + 1) + 5);
 }
