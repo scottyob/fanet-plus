@@ -23,11 +23,11 @@
 #endif
 
 #ifndef FANET_RXMIT_MIN
-#define FANET_RXMIT_MIN 300  // Min time (in ms) we should wait before rxmit'ing a packet
+#define FANET_RXMIT_MIN 10  // Min time (in ms) we should wait before rxmit'ing a packet
 #endif
 
 #ifndef FANET_RXMIT_MAX
-#define FANET_RXMIT_MAX 600  // Maximum time (in ms) we should wait before rxmit'ing a packet
+#define FANET_RXMIT_MAX 500  // Maximum time (in ms) we should wait before rxmit'ing a packet
 #endif
 
 #ifndef FANET_FORWARD_MIN_DB_BOOST
@@ -155,10 +155,6 @@ namespace Fanet {
                 int heading = 0,  // in degrees
                 float climbRate = 0.0f,
                 float speedKmh = 0.0f) {
-      if (this->lat == lat && this->lng == lng && this->alt == alt) {
-        return;
-      }
-
       this->lat = lat;
       this->lng = lng;
       this->alt = alt;
@@ -219,7 +215,7 @@ namespace Fanet {
     void queueTrackingUpdate(const unsigned long& ms);
 
     // Time which we're allowed to enqueue a tracking packet
-    unsigned long nextAllowedTrackingTime;
+    unsigned long nextAllowedTrackingTime = 0;
 
     // Keep track of statistics
     Stats stats;

@@ -22,6 +22,11 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
   // A packet has been received.  First parse it.
   auto packet = Packet::parse(bytes, size);
 
+  if (packet.header.srcMac.toInt32() == 0) {
+    // The packet does not have a SRC.  Throw it away
+    return etl::nullopt;  // should probably have a counter for these
+  }
+
   // If the packet is from our own mac-address, it's probably a forward and can be dropped
   if (packet.header.srcMac == src) {
     stats.rxFromUsDrp++;
@@ -200,7 +205,7 @@ void Fanet::FanetManager::flushOldNeighborEntries(const unsigned long& currentMs
   size_t cutoff = valid_neighbors.size() * 0.25;
   valid_neighbors.erase(valid_neighbors.begin(), valid_neighbors.begin() + cutoff);
 
-  // Step 4: Rebuild the unordered_map
+  // Step  : Rebuild the unordered_map
   neighborTable.clear();
   for (const auto& entry : valid_neighbors) {
     neighborTable.insert(entry);
