@@ -13,7 +13,8 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
     const etl::array<uint8_t, FANET_MAX_PACKET_SIZE>& bytes,
     const size_t& size,
     unsigned long ms,
-    float rssi) {
+    float rssi,
+    float snr) {
   stats.rx++;
 
   // If this packet is useful to the application layer, we'll return it
@@ -37,12 +38,41 @@ etl::optional<Packet> Fanet::FanetManager::handleRx(
   auto it = neighborTable.find(packet.header.srcMac.toInt32());
   auto inTable = (it != neighborTable.end());
   if (inTable) {
-    it->second = ms;
+    // Neighbor is in the table, just update the last seen time
+    it->second.lastSeen = ms;
+    it->second.rssi = rssi;
+    it->second.snr = snr;
   } else {
+    // Neighbor is not in the table.  Flush out the old entries, and add a new one in
     if (neighborTable.full()) {
       flushOldNeighborEntries(ms);
     }
-    neighborTable.insert(etl::pair<uint32_t, unsigned long>(packet.header.srcMac, ms));
+    Neighbor newEntry;
+    newEntry.address = packet.header.srcMac;
+    newEntry.rssi = rssi;
+    newEntry.snr = snr;
+    newEntry.lastSeen = ms;
+    neighborTable.insert(etl::pair<uint32_t, Neighbor>(packet.header.srcMac.toInt32(), newEntry));
+  }
+
+  // Update the cached location and ground tracking type for the neighbor
+  auto& neighbor = neighborTable[packet.header.srcMac.toInt32()];
+  switch (packet.header.type) {
+    case PacketType::Tracking: {
+      auto& payload = etl::get<Tracking>(packet.payload);
+      // Clear out any ground tracking status
+      neighbor.groundTrackingType = etl::nullopt;
+      neighbor.location = payload.location;
+      neighbor.altitude = payload.altitude;
+      break;
+    }
+    case PacketType::GroundTracking: {
+      auto& payload = etl::get<GroundTracking>(packet.payload);
+      neighbor.groundTrackingType = payload.type;
+      neighbor.location = payload.location;
+      neighbor.altitude = etl::nullopt;
+      break;
+    }
   }
 
   // Destination address, if set.
@@ -179,11 +209,11 @@ bool Fanet::FanetManager::sendPacket(const PacketPayload payload,
 }
 
 void Fanet::FanetManager::flushOldNeighborEntries(const unsigned long& currentMs) {
-  etl::vector<std::pair<uint32_t, unsigned long>, FANET_MAX_NEIGHBORS> valid_neighbors;
+  etl::vector<std::pair<uint32_t, Neighbor>, FANET_MAX_NEIGHBORS> valid_neighbors;
 
   // Step 1: Iterate and collect valid neighbors
   for (auto it = neighborTable.begin(); it != neighborTable.end();) {
-    if (currentMs - it->second > FANET_NEIGHBOR_MAX_TIMEOUT) {
+    if (currentMs - it->second.lastSeen > FANET_NEIGHBOR_MAX_TIMEOUT) {
       it = neighborTable.erase(it);  // Remove expired neighbor
     } else {
       valid_neighbors.push_back(*it);
@@ -198,7 +228,7 @@ void Fanet::FanetManager::flushOldNeighborEntries(const unsigned long& currentMs
 
   // Step 2: Sort valid neighbors by timestamp (oldest first)
   etl::sort(valid_neighbors.begin(), valid_neighbors.end(), [](const auto& a, const auto& b) {
-    return a.second < b.second;
+    return a.second.lastSeen < b.second.lastSeen;
   });
 
   // Step 3: Remove 25% of the oldest entries

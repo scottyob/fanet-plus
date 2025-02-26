@@ -7,6 +7,7 @@
 #include "etl/random.h"
 #include "etl/unordered_map.h"
 #include "fanetMac.h"
+#include "fanetNeighbor.h"
 #include "fanetPacket.h"
 
 // we keep the neighbors around for 5 minutes before timing them out.
@@ -114,7 +115,8 @@ namespace Fanet {
     etl::optional<Packet> handleRx(const etl::array<uint8_t, FANET_MAX_PACKET_SIZE>& bytes,
                                    const size_t& size,
                                    unsigned long ms,
-                                   float rssi);
+                                   float rssi,
+                                   float snr);
 
     /// @brief Handles transmitting a packet from our tx queue
     /// @param ms current time
@@ -141,7 +143,7 @@ namespace Fanet {
 
     /// @brief If set, we'll transmit our position as ground positions
     /// @param type
-    void setGroundType(etl::optional<GroundTrackingType> type) { groundType = type; }
+    void setGroundType(etl::optional<GroundTrackingType::enum_type> type) { groundType = type; }
 
     /// @brief Sets the position to transmit based on location update rules (how much traffic we
     /// see)
@@ -175,11 +177,16 @@ namespace Fanet {
       return ret;
     }
 
+    /// @brief Gets a copy of the neighbor table
+    etl::unordered_map<uint32_t, Neighbor, FANET_MAX_NEIGHBORS> getNeighborTable() {
+      return neighborTable;
+    }
+
    private:
     etl::optional<Mac> src;  // Src address, (ours)
 
     // Neighbor table with key being mac address, value being when we last saw them
-    etl::unordered_map<uint32_t, unsigned long, FANET_MAX_NEIGHBORS> neighborTable;
+    etl::unordered_map<uint32_t, Neighbor, FANET_MAX_NEIGHBORS> neighborTable;
 
     // etl:: <Packet, FANET_TX_QUEUE_DEPTH> txQueue;
     etl::list<TxPacket, FANET_TX_QUEUE_DEPTH> txQueue;
@@ -207,7 +214,7 @@ namespace Fanet {
     float climbRate;
     int heading;
     float speed;
-    etl::optional<GroundTrackingType> groundType;
+    etl::optional<GroundTrackingType::enum_type> groundType;
 
     /// @brief Queues a tracking update packet if the internal has been long enough since our last
     /// update
