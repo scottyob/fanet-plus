@@ -182,6 +182,9 @@ namespace Fanet {
       return neighborTable;
     }
 
+    /// @brief Flushes old neighbors from the state table
+    void flushOldNeighborEntries(const unsigned long& currentMs);
+
    private:
     etl::optional<Mac> src;  // Src address, (ours)
 
@@ -190,10 +193,6 @@ namespace Fanet {
 
     // etl:: <Packet, FANET_TX_QUEUE_DEPTH> txQueue;
     etl::list<TxPacket, FANET_TX_QUEUE_DEPTH> txQueue;
-
-    /// @brief Flushes old neighbors from the state table
-    /// @param makeHeadroom Ensures there is
-    void flushOldNeighborEntries(const unsigned long& currentMs);
 
     /// @brief Queues a packet for transmission
     /// @param txPacket packet to queue
