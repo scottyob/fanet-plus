@@ -335,5 +335,5 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
 
   // Location update interval is
   // recommended interval: floor((#neighbors/10 + 1) * 5s)
-  nextAllowedTrackingTime = ms + floor((neighborTable.size() / 10.0f + 1) + 5);
+  nextAllowedTrackingTime = ms + floor((neighborTable.size() / 10.0f + 1) + 5000);
 }
