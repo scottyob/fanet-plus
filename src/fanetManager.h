@@ -145,6 +145,10 @@ namespace Fanet {
     /// @param type
     void setGroundType(etl::optional<GroundTrackingType::enum_type> type) { groundType = type; }
 
+    /// @brief Returns the ground tracking type
+    /// @return current ground tracking type
+    etl::optional<GroundTrackingType::enum_type> getGroundType() const { return groundType; }
+
     /// @brief Sets the position to transmit based on location update rules (how much traffic we
     /// see)
     /// @param lat latitude
