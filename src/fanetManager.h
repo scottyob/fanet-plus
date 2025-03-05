@@ -189,7 +189,7 @@ namespace Fanet {
     /// @brief Flushes old neighbors from the state table
     void flushOldNeighborEntries(const unsigned long& currentMs);
 
-   private:
+   protected:
     etl::optional<Mac> src;  // Src address, (ours)
 
     // Neighbor table with key being mac address, value being when we last saw them
@@ -226,6 +226,8 @@ namespace Fanet {
 
     // Time which we're allowed to enqueue a tracking packet
     unsigned long nextAllowedTrackingTime = 0;
+
+    unsigned long lastLocationSentMs = 0;
 
     // Keep track of statistics
     Stats stats;

@@ -139,6 +139,10 @@ void Fanet::FanetManager::doTx(
     // No idea why these values, they came from the stm32 Fanet implementation.
     csmaNextTx = ms + 15 + (size * 2);
     stats.txSuccess++;
+
+    // If this was a location packet sent from us, update the debug variable
+    if (txPacket.packet.header.srcMac == src && txPacket.packet.header.type == PacketType::Tracking)
+      lastLocationSentMs = ms;
   } else {
     // If the transmit failed, we'll wait a random amount of time before trying again
     csmaNextTx = ms + random.range(FANET_CSMA_MIN, FANET_CSMA_MAX);
@@ -311,6 +315,11 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
     return;
   }
 
+  // Add a random 500ms splay to the tracking updates to ensure
+  // if multiple nodes are getting GPS updates all synchronized, we don't
+  // all TX at the same time.
+  auto offset = random.range(75, 500);
+
   // Insert a location packet
   if (groundType.has_value()) {
     // This is a ground tracking update
@@ -319,7 +328,7 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
     payload.location.longitude = lng;
     payload.shouldTrackOnline = true;
     payload.type = groundType.value();
-    sendPacket(payload, ms);
+    sendPacket(payload, ms + offset);
   } else {
     auto payload = Tracking();
     payload.aircraftType = aircraftType;
@@ -330,10 +339,10 @@ void Fanet::FanetManager::queueTrackingUpdate(const unsigned long& ms) {
     payload.location.longitude = lng;
     payload.onlineTracking = true;
     payload.speed = speed;
-    sendPacket(payload, ms);
+    sendPacket(payload, ms + offset);
   }
 
   // Location update interval is
   // recommended interval: floor((#neighbors/10 + 1) * 5s)
-  nextAllowedTrackingTime = ms + floor((neighborTable.size() / 10.0f + 1) + 5000);
+  nextAllowedTrackingTime = ms + offset + floor((neighborTable.size() / 10.0f + 1) + 5000);
 }
